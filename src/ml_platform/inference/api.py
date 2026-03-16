@@ -33,10 +33,12 @@ app = FastAPI(
 
 @app.get("/")
 def root() -> dict[str, Any]:
+    status = predictor.status()
     return {
         "service": "mini-ml-training-platform",
-        "task": "KITTI scene presence classification",
-        "model": predictor.status(),
+        "dataset_name": status.get("dataset_name"),
+        "task_type": status.get("task_type", "classification"),
+        "model": status,
     }
 
 

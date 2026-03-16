@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 
 from ml_platform.config import get_settings
 from ml_platform.constants import KITTI_CLASS_NAMES
+from ml_platform.data.profile import DatasetProfile, write_dataset_profile
 
 IMAGE_SIZE = (192, 128)
 
@@ -122,6 +123,16 @@ def generate_dataset(output_root: Path, sample_count: int, force: bool, seed: in
         (label_dir / f"{spec.sample_id}.txt").write_text(
             "\n".join(labels) + "\n", encoding="utf-8"
         )
+
+    write_dataset_profile(
+        settings,
+        DatasetProfile(
+            dataset_name="synthetic_kitti_scene_presence",
+            source="local_generator",
+            description="Synthetic KITTI-style dataset used for smoke testing the platform.",
+            class_names=KITTI_CLASS_NAMES,
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

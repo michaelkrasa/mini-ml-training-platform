@@ -9,8 +9,9 @@ from random import Random
 from typing import Sequence
 
 from ml_platform.config import PlatformSettings
-from ml_platform.constants import KITTI_CLASS_NAMES
+from ml_platform.constants import KITTI_CLASS_NAMES, MULTI_LABEL_TASK
 from ml_platform.data.kitti import KittiRecord, discover_records
+from ml_platform.data.profile import resolve_dataset_profile
 from ml_platform.utils.hashing import sha256_file, stable_json_digest
 from ml_platform.utils.io import read_json, write_json
 
@@ -30,6 +31,8 @@ class DatasetSample:
 @dataclass(frozen=True)
 class DatasetManifest:
     dataset_root: str
+    dataset_name: str
+    task_type: str
     fingerprint: str
     created_at: str
     class_names: tuple[str, ...]
@@ -62,16 +65,20 @@ def _choose_val_ids(sample_ids: Sequence[str], seed: int, val_ratio: float) -> s
 
 def build_dataset_manifest(
     settings: PlatformSettings,
-    class_names: Sequence[str] = KITTI_CLASS_NAMES,
+    class_names: Sequence[str] | None = None,
     seed: int | None = None,
     val_ratio: float = 0.2,
     persist: bool = True,
 ) -> DatasetManifest:
+    dataset_profile = resolve_dataset_profile(settings)
     resolved_seed = settings.training_seed if seed is None else seed
+    resolved_class_names = (
+        tuple(class_names) if class_names is not None else dataset_profile.class_names
+    )
     records = discover_records(
         images_dir=settings.images_dir,
         labels_dir=settings.labels_dir,
-        class_names=class_names,
+        class_names=resolved_class_names,
     )
     if not records:
         raise RuntimeError(
@@ -108,17 +115,21 @@ def build_dataset_manifest(
 
     fingerprint = stable_json_digest(
         {
-            "class_names": tuple(class_names),
+            "class_names": resolved_class_names,
+            "dataset_name": dataset_profile.dataset_name,
             "seed": resolved_seed,
             "samples": fingerprint_payload,
+            "task_type": dataset_profile.task_type,
             "val_ratio": val_ratio,
         }
     )
     manifest = DatasetManifest(
         dataset_root=str(settings.dataset_root),
+        dataset_name=dataset_profile.dataset_name,
+        task_type=dataset_profile.task_type,
         fingerprint=fingerprint,
         created_at=datetime.now(timezone.utc).isoformat(),
-        class_names=tuple(class_names),
+        class_names=resolved_class_names,
         seed=resolved_seed,
         val_ratio=val_ratio,
         samples=tuple(samples),
@@ -150,6 +161,8 @@ def load_manifest(path: Path) -> DatasetManifest:
     )
     return DatasetManifest(
         dataset_root=payload["dataset_root"],
+        dataset_name=payload.get("dataset_name", "kitti_scene_presence"),
+        task_type=payload.get("task_type", MULTI_LABEL_TASK),
         fingerprint=payload["fingerprint"],
         created_at=payload["created_at"],
         class_names=tuple(payload["class_names"]),

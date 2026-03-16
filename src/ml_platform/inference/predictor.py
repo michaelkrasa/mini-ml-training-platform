@@ -14,7 +14,7 @@ import torch
 from PIL import Image, UnidentifiedImageError
 
 from ml_platform.config import PlatformSettings
-from ml_platform.constants import DEFAULT_IMAGE_SIZE
+from ml_platform.constants import DEFAULT_IMAGE_SIZE, MULTI_LABEL_TASK, SINGLE_LABEL_TASK
 from ml_platform.data.kitti import preprocess_image
 from ml_platform.registry.mlflow_registry import (
     ModelRegistryPointer,
@@ -32,6 +32,8 @@ class PredictorNotReady(RuntimeError):
 @dataclass(frozen=True)
 class LoadedModelState:
     pointer: ModelRegistryPointer
+    dataset_name: str
+    task_type: str
     class_names: tuple[str, ...]
     image_size: tuple[int, int]
     dataset_fingerprint: str | None
@@ -96,6 +98,8 @@ class ModelPredictor:
             self._model = model
             self._state = LoadedModelState(
                 pointer=pointer,
+                dataset_name=metadata.get("dataset_name", "unknown"),
+                task_type=metadata.get("task_type", MULTI_LABEL_TASK),
                 class_names=class_names,
                 image_size=(int(image_size[0]), int(image_size[1])),
                 dataset_fingerprint=metadata.get("dataset_fingerprint"),
@@ -126,22 +130,33 @@ class ModelPredictor:
 
             with torch.no_grad():
                 logits = self._model(tensor.to(self.device))
-                probabilities = torch.sigmoid(logits).squeeze(0).cpu().tolist()
+                squeezed_logits = logits.squeeze(0).cpu()
+                if self._state.task_type == SINGLE_LABEL_TASK:
+                    probabilities = torch.softmax(squeezed_logits, dim=0).tolist()
+                else:
+                    probabilities = torch.sigmoid(squeezed_logits).tolist()
 
             labels = dict(zip(self._state.class_names, probabilities, strict=True))
-            predicted_labels = [
-                class_name
-                for class_name, probability in labels.items()
-                if probability >= 0.5
-            ]
             top_predictions = sorted(
                 labels.items(), key=lambda item: item[1], reverse=True
             )[:3]
+            predicted_label = top_predictions[0][0]
+            if self._state.task_type == SINGLE_LABEL_TASK:
+                predicted_labels = [predicted_label]
+            else:
+                predicted_labels = [
+                    class_name
+                    for class_name, probability in labels.items()
+                    if probability >= 0.5
+                ]
             return {
                 "model_name": self.settings.mlflow_model_name,
                 "model_version": self._state.pointer.version,
                 "model_alias": self._state.pointer.alias,
+                "dataset_name": self._state.dataset_name,
+                "task_type": self._state.task_type,
                 "dataset_fingerprint": self._state.dataset_fingerprint,
+                "predicted_label": predicted_label,
                 "predicted_labels": predicted_labels,
                 "top_predictions": [
                     {"label": label, "probability": round(probability, 4)}
@@ -167,6 +182,8 @@ class ModelPredictor:
                 "model_alias": self._state.pointer.alias,
                 "model_version": self._state.pointer.version,
                 "run_id": self._state.pointer.run_id,
+                "dataset_name": self._state.dataset_name,
+                "task_type": self._state.task_type,
                 "dataset_fingerprint": self._state.dataset_fingerprint,
                 "class_names": list(self._state.class_names),
                 "image_size": list(self._state.image_size),

@@ -7,8 +7,22 @@ This repository demonstrates the core ML lifecycle infrastructure expected from 
 - model versioning through the MLflow Model Registry
 - online inference with FastAPI
 - optional automatic retraining when the dataset changes
+- benchmark validation against downloaded public datasets
 
 The implementation intentionally uses a lightweight perception task so the platform mechanics stay front and center. Training turns KITTI object labels into a multi-label scene classifier that predicts whether each object category is present in an image. That keeps the project small enough to run locally while still using a real perception-style dataset contract.
+
+## What It Is Good For Right Now
+
+Today this project is strongest as an ML platform demonstration, not as a production-grade model training stack. It is good for proving that you can design and operate the core workflow around a model:
+
+- convert raw data into a reproducible training contract
+- fingerprint datasets and persist manifests for reruns
+- run training jobs with tracked parameters and metrics
+- register model versions and resolve the latest champion at inference time
+- trigger retraining when data changes
+- validate the whole path on benchmark datasets without hand-curated local files
+
+It is not yet optimized for model quality, distributed training, feature stores, GPUs, or Kubernetes-native job execution. Those would be natural next layers.
 
 ## Planned Architecture
 
@@ -144,3 +158,25 @@ The runtime contract is simple:
 - each label file uses KITTI object lines where the first token is the class name
 
 The synthetic dataset generator exists only so the platform is runnable out of the box. Replacing it with a real KITTI split requires no code changes.
+
+## Benchmark Validation
+
+The repo can now download and convert several popular benchmark datasets into the platform's `dataset/images` plus `dataset/labels` contract:
+
+- `mnist`
+- `fashion-mnist`
+- `cifar10`
+
+Download a dataset into the local dataset workspace:
+
+```bash
+make download-dataset DATASET=mnist
+```
+
+Run a full validation flow that downloads the dataset, starts a local MLflow server, trains a model, registers it, and exercises inference end to end:
+
+```bash
+make validate-platform DATASET=mnist
+```
+
+The validation runner writes a JSON report under `artifacts/validation/` so the proof of execution is saved alongside the repo.

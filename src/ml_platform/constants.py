@@ -16,3 +16,6 @@ KITTI_CLASS_NAMES = (
 DEFAULT_IMAGE_SIZE = (96, 96)
 
 SUPPORTED_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
+
+MULTI_LABEL_TASK = "multi_label_classification"
+SINGLE_LABEL_TASK = "single_label_classification"

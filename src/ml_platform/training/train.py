@@ -247,6 +247,8 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
     )
 
     metadata = {
+        "dataset_name": manifest.dataset_name,
+        "task_type": manifest.task_type,
         "class_names": list(manifest.class_names),
         "image_size": [config.image_size, config.image_size],
         "dataset_fingerprint": manifest.fingerprint,
@@ -260,6 +262,8 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
         "experiment_name": settings.mlflow_experiment_name,
         "model_name": settings.mlflow_model_name,
         "model_alias": settings.mlflow_model_alias,
+        "dataset_name": manifest.dataset_name,
+        "task_type": manifest.task_type,
         "dataset_fingerprint": manifest.fingerprint,
         "class_names": list(manifest.class_names),
         "device": str(device),
@@ -283,8 +287,10 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
         mlflow.set_tags(
             {
                 "dataset_fingerprint": manifest.fingerprint,
+                "dataset_name": manifest.dataset_name,
                 "git_commit": metadata["git_commit"],
-                "task": "scene_presence_classification",
+                "task": manifest.task_type,
+                "task_type": manifest.task_type,
                 "framework": "pytorch",
             }
         )
@@ -295,6 +301,8 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
                 "learning_rate": config.learning_rate,
                 "val_ratio": config.val_ratio,
                 "image_size": config.image_size,
+                "dataset_name": manifest.dataset_name,
+                "task_type": manifest.task_type,
                 "seed": settings.training_seed,
                 "train_examples": manifest.split_counts()["train"],
                 "val_examples": manifest.split_counts().get("val", 0),
