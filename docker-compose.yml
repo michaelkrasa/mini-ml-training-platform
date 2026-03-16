@@ -1,0 +1,61 @@
+services:
+  mlflow:
+    build:
+      context: .
+    command: >
+      uv run mlflow server
+      --backend-store-uri sqlite:////app/mlflow/mlflow.db
+      --default-artifact-root /app/mlartifacts
+      --host 0.0.0.0
+      --port 5000
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  inference:
+    build:
+      context: .
+    command: >
+      uv run uvicorn ml_platform.inference.api:app
+      --host 0.0.0.0
+      --port 8000
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      DATASET_ROOT: /app/dataset
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_ALIAS: champion
+      MLFLOW_MODEL_NAME: kitti-presence-classifier
+      MODEL_REFRESH_INTERVAL_SECONDS: 15
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+  retrainer:
+    build:
+      context: .
+    command: >
+      uv run python -m ml_platform.orchestration.retrain_watcher
+      --interval-seconds 30
+      --cooldown-seconds 60
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      DATASET_ROOT: /app/dataset
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_ALIAS: champion
+      MLFLOW_MODEL_NAME: kitti-presence-classifier
+      TRAINING_OUTPUT_ROOT: /app/artifacts
+    volumes:
+      - .:/app
