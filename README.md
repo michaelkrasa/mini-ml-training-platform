@@ -41,10 +41,106 @@ retraining watcher
 - FastAPI for online inference
 - Docker Compose for local platform services
 
-## Current Status
+## Why The Model Is Intentionally Lightweight
 
-The repository is being built in staged commits:
+The platform demonstrates ML infrastructure, not state-of-the-art perception accuracy. Instead of training a full detector, the training job converts KITTI object annotations into a multi-label scene classifier that predicts which object classes are present in the frame. That keeps the code and runtime compact while still exercising the real platform concerns:
 
-1. platform scaffold
-2. end-to-end training and inference workflow
-3. retraining automation, tests, and final documentation
+- deterministic dataset manifests
+- experiment metadata
+- model registration and version lookup
+- inference artifact management
+- retraining orchestration
+
+## Repository Layout
+
+```text
+dataset/
+  images/                 image inputs
+  labels/                 KITTI label_2 style text files
+  manifests/              dataset fingerprints and train/val splits
+
+scripts/
+  bootstrap_sample_dataset.py
+
+src/ml_platform/
+  data/                   KITTI parsing and manifest creation
+  training/               model, metrics, and MLflow-backed train job
+  registry/               MLflow registry helpers
+  inference/              FastAPI service and registry-backed predictor
+  orchestration/          automatic retraining watcher
+```
+
+## Quick Start
+
+1. Install dependencies.
+
+```bash
+uv sync --extra dev
+```
+
+2. Generate a runnable local dataset, or place your own KITTI-style files under `dataset/images` and `dataset/labels`.
+
+```bash
+make sample-data
+```
+
+3. Start MLflow.
+
+```bash
+make mlflow-up
+```
+
+4. Run a training job. This fingerprints the dataset, logs metrics to MLflow, registers a model version, and moves the `champion` alias to the new version.
+
+```bash
+make train
+```
+
+5. Start the FastAPI inference service.
+
+```bash
+make serve
+```
+
+6. Query the latest registered model.
+
+```bash
+curl -X POST \
+  -F "file=@dataset/images/000000.png" \
+  http://127.0.0.1:8000/predict
+```
+
+7. Optionally run the automatic retraining loop. It polls for dataset fingerprint changes and retrains when the image or label set changes.
+
+```bash
+make retrain
+```
+
+## Docker Workflow
+
+Bring up the local platform stack:
+
+```bash
+docker-compose up --build mlflow inference retrainer
+```
+
+The stack uses shared local volumes in the repo so runs, artifacts, and manifests are inspectable without container-specific tooling.
+
+## What This Project Demonstrates
+
+- Reproducible training: every run logs the dataset fingerprint, seed, hyperparameters, Git commit, and a persisted manifest describing the train/val split.
+- Experiment tracking: MLflow captures epoch metrics, artifacts, and run metadata.
+- Model versioning: the training job registers each new model and updates the `champion` alias.
+- Deployment: the inference API resolves the latest registered version at runtime instead of reading a hardcoded local checkpoint.
+- Operations mindset: the retraining watcher treats dataset changes as an event source and re-triggers the full training and registration workflow.
+
+## Using A Real KITTI Export
+
+The runtime contract is simple:
+
+- images go in `dataset/images`
+- labels go in `dataset/labels`
+- each image must have a same-stem `.txt` label file
+- each label file uses KITTI object lines where the first token is the class name
+
+The synthetic dataset generator exists only so the platform is runnable out of the box. Replacing it with a real KITTI split requires no code changes.
