@@ -105,6 +105,8 @@ def _run_epoch(
         "exact_match": 0.0,
         "macro_f1": 0.0,
         "examples": 0.0,
+        "top1_accuracy": 0.0,
+        "top1_examples": 0.0,
     }
 
     for features, targets, _ in loader:
@@ -127,15 +129,21 @@ def _run_epoch(
         totals["label_accuracy"] += stats["label_accuracy"] * batch_size
         totals["exact_match"] += stats["exact_match"] * batch_size
         totals["macro_f1"] += stats["macro_f1"] * batch_size
+        if "top1_accuracy" in stats:
+            totals["top1_accuracy"] += stats["top1_accuracy"] * batch_size
+            totals["top1_examples"] += batch_size
         totals["examples"] += batch_size
 
     example_count = max(totals["examples"], 1.0)
-    return {
+    results = {
         "loss": totals["loss"] / example_count,
         "label_accuracy": totals["label_accuracy"] / example_count,
         "exact_match": totals["exact_match"] / example_count,
         "macro_f1": totals["macro_f1"] / example_count,
     }
+    if totals["top1_examples"] > 0.0:
+        results["top1_accuracy"] = totals["top1_accuracy"] / totals["top1_examples"]
+    return results
 
 
 def _environment_metadata() -> dict[str, str]:
@@ -216,6 +224,8 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
             "train_macro_f1": train_metrics["macro_f1"],
             "epoch_duration_seconds": duration_seconds,
         }
+        if "top1_accuracy" in train_metrics:
+            epoch_record["train_top1_accuracy"] = train_metrics["top1_accuracy"]
         if val_metrics:
             epoch_record.update(
                 {
@@ -225,6 +235,8 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
                     "val_macro_f1": val_metrics["macro_f1"],
                 }
             )
+            if "top1_accuracy" in val_metrics:
+                epoch_record["val_top1_accuracy"] = val_metrics["top1_accuracy"]
             ranking_metric = val_metrics["loss"]
         else:
             ranking_metric = train_metrics["loss"]

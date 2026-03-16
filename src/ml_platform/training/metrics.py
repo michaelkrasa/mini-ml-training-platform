@@ -23,8 +23,15 @@ def batch_classification_stats(
     active_classes = (predicted_positive + actual_positive) > 0
     macro_f1 = f1[active_classes].mean().item() if active_classes.any() else 0.0
 
-    return {
+    stats = {
         "label_accuracy": label_accuracy,
         "exact_match": exact_match,
         "macro_f1": macro_f1,
     }
+    row_sums = targets.sum(dim=1)
+    if torch.allclose(row_sums, torch.ones_like(row_sums), atol=1e-6):
+        top1_accuracy = (
+            logits.argmax(dim=1) == targets.argmax(dim=1)
+        ).float().mean().item()
+        stats["top1_accuracy"] = top1_accuracy
+    return stats
