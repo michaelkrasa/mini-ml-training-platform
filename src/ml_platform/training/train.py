@@ -279,6 +279,7 @@ def train(config: TrainingConfig, manifest_path: Path | None = None) -> dict[str
         "dataset_fingerprint": manifest.fingerprint,
         "class_names": list(manifest.class_names),
         "device": str(device),
+        "git_commit": metadata["git_commit"],
         "history": history,
         "training_config": asdict(config),
     }

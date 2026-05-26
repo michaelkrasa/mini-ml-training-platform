@@ -8,6 +8,9 @@ This repository demonstrates the core ML lifecycle infrastructure expected from 
 - online inference with FastAPI
 - optional automatic retraining when the dataset changes
 - benchmark validation against downloaded public datasets
+- active-learning candidate mining from reproducible dataset manifests
+- model promotion gates and image rollout manifests for closed-loop deployment
+- a PyTorch `torchrun` entrypoint for multi-process distributed training experiments
 
 The implementation intentionally uses a lightweight perception task so the platform mechanics stay front and center. Training turns KITTI object labels into a multi-label scene classifier that predicts whether each object category is present in an image. That keeps the project small enough to run locally while still using a real perception-style dataset contract.
 
@@ -23,6 +26,8 @@ Today this project is strongest as an ML platform demonstration, not as a produc
 - validate the whole path on benchmark datasets without hand-curated local files
 
 It is not yet optimized for model quality, distributed training, feature stores, GPUs, or Kubernetes-native job execution. Those would be natural next layers.
+
+The repository now includes pragmatic hooks for those next layers: distributed launch configuration, active data mining, model promotion policy checks, and deployment packaging metadata. They are intentionally small and runnable locally, but they mirror the control-plane responsibilities used in larger AI flywheels.
 
 ## Planned Architecture
 
@@ -46,6 +51,18 @@ inference API
 retraining watcher
   -> detects dataset updates
   -> reruns training
+
+active mining
+  -> ranks manifest samples by class rarity and scene density
+  -> emits candidate sets for labeling or replay prioritization
+
+promotion gate
+  -> evaluates candidate model metrics against release thresholds
+  -> writes a pass/fail report for automated selection
+
+deployment package
+  -> creates an immutable image tag from model version and dataset fingerprint
+  -> records rollout targets and validation gate status
 ```
 
 ## Stack
@@ -54,6 +71,7 @@ retraining watcher
 - MLflow for experiments and model registry
 - FastAPI for online inference
 - Docker Compose for local platform services
+- PyTorch distributed launcher for DDP-style local or multi-node training starts
 
 ## Why The Model Is Intentionally Lightweight
 
@@ -130,6 +148,24 @@ curl -X POST \
 make retrain
 ```
 
+8. Rank training examples for active learning or replay prioritization.
+
+```bash
+make active-mine
+```
+
+9. Dry-run a distributed PyTorch training launch. Remove `--dry-run` in `Makefile` or call the module directly to execute with `torchrun`.
+
+```bash
+make train-distributed
+```
+
+10. Package a trained model summary into rollout metadata.
+
+```bash
+make package-model SUMMARY=artifacts/training/<run>/training_summary.json
+```
+
 ## Docker Workflow
 
 Bring up the local platform stack:
@@ -147,6 +183,19 @@ The stack uses shared local volumes in the repo so runs, artifacts, and manifest
 - Model versioning: the training job registers each new model and updates the `champion` alias.
 - Deployment: the inference API resolves the latest registered version at runtime instead of reading a hardcoded local checkpoint.
 - Operations mindset: the retraining watcher treats dataset changes as an event source and re-triggers the full training and registration workflow.
+- Distributed training readiness: the `train-distributed` command builds a PyTorch `torch.distributed.run` launch around the existing training module, so the same training contract can be exercised under multi-process launches.
+- Smart data mining: `active-mine` ranks manifest samples by class rarity and multi-object scene density, producing a JSON candidate set that approximates active-learning/replay-buffer prioritization.
+- Automated model selection: promotion gates evaluate validation metrics against explicit thresholds and produce machine-readable pass/fail reports.
+- Deployment packaging: model rollout manifests bind together MLflow model version, dataset fingerprint, Git commit, validation gate, and container image tag.
+
+## AI Flywheel Extensions
+
+These extensions are deliberately compact, but they map to production platform concerns:
+
+- `ml_platform.data.mining` turns petabyte-scale log-mining ideas into a deterministic manifest-ranking strategy.
+- `ml_platform.training.distributed` provides the launch surface for PyTorch DDP or multi-node experiments.
+- `ml_platform.deployment.gates` gives retraining jobs a policy layer for champion/candidate model selection.
+- `ml_platform.deployment.package` emits immutable rollout metadata suitable for image validation and fleet-style deployment workflows.
 
 ## Using A Real KITTI Export
 

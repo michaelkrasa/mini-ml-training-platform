@@ -7,6 +7,10 @@ import importlib
 
 
 COMMAND_MODULES = {
+    "active-mine": "ml_platform.data.mining",
+    "evaluate-promotion": "ml_platform.deployment.gates",
+    "package-model": "ml_platform.deployment.package",
+    "train-distributed": "ml_platform.training.distributed",
     "train": "ml_platform.training.train",
     "serve": "ml_platform.inference.api",
     "retrain-watcher": "ml_platform.orchestration.retrain_watcher",
